@@ -127,6 +127,9 @@ class DB:
                 upsert=True,
                 return_document=self.ReturnDocument.AFTER
             )
+            # Keep a single passcode document to avoid stale-code matches.
+            if updated and "_id" in updated:
+                code.delete_many({"type": "passcode", "_id": {"$ne": updated["_id"]}})
             return updated is not None
         except self.PyMongoError:
             return False
@@ -141,7 +144,11 @@ class DB:
         client = None
         try:
             client, code = self._collection("code")
-            return code.count_documents({"type": "passcode", "code": passcode})
+            doc = code.find_one({"type": "passcode"}, {"_id": 0, "code": 1})
+            if not doc:
+                return 0
+            stored = str(doc.get("code", ""))
+            return 1 if stored == str(passcode) else 0
         except self.PyMongoError:
             return 0
         finally:

@@ -18,7 +18,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const mqtt              = ref(null);
     const host              = ref("www.yanacreations.com");  // Host Name or IP address
     const port              = ref(9002);  // Port number
-    const payload           = ref({"id":620012345,"timestamp": 1702566538,"number":0,"ledA":0,"ledB":0}); // Set initial values for payload
+    const payload           = ref({"id":620169874,"timestamp": 1702566538,"number":0,"ledA":0,"ledB":0}); // Set initial values for payload
     const payloadTopic      = ref("");
     const subTopics         = ref({});
  
@@ -34,13 +34,11 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const onConnected = (reconnect,URI)=> {
         // called when a connection is successfully made to the server. after a connect() method.
         console.log(`Connected to: ${URI} , Reconnect: ${reconnect}`);      
-        if(reconnect){
-            const topics = Object.keys(subTopics.value);
-            if(topics.length > 0 ){
-                topics.forEach((topic)=>{
-                    subscribe(topic);
-                })
-            }
+        const topics = Object.keys(subTopics.value);
+        if(topics.length > 0 ){
+            topics.forEach((topic)=>{
+                subscribe(topic);
+            })
         }
     }
  
@@ -99,10 +97,14 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
 
     const subscribe = (topic) => {
         // Subscribe for messages, request receipt of a copy of messages sent to the destinations described by the filter.
-        // console.log(`MQTT: Subscribing to - ${topic}`);
+        if(!topic){ return; }
+        subTopics.value[topic] = subTopics.value[topic] || "pending";
+        if(!mqtt.value || (typeof mqtt.value.isConnected === "function" && !mqtt.value.isConnected())){
+            return;
+        }
         try {
             var subscribeOptions = { onSuccess: sub_onSuccess, onFailure: sub_onFailure, invocationContext:{"topic":topic} }
-        mqtt.value.subscribe(topic,subscribeOptions);   
+            mqtt.value.subscribe(topic,subscribeOptions);   
         } catch (error) {
             console.log(`MQTT: Unable to Subscribe ${error} `);
         }
@@ -126,6 +128,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
 
     const unsubcribe = (topic) => {     
         // Unsubscribe for messages, stop receiving messages sent to destinations described by the filter.      
+        if(!mqtt.value || !topic){ return; }
         var unsubscribeOptions	 = { onSuccess: unSub_onSuccess, onFailure: unSub_onFailure, invocationContext:{"topic":topic} }
         mqtt.value.unsubscribe(topic, unsubscribeOptions);         
         }

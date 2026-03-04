@@ -6,6 +6,7 @@
 
 // Plugins
 import { registerPlugins } from '@/plugins'
+import HighchartsVue from 'highcharts-vue'
 
 // Components
 import App from './App.vue'
@@ -16,5 +17,6 @@ import { createApp } from 'vue'
 const app = createApp(App)
 
 registerPlugins(app)
+app.use(HighchartsVue)
 
 app.mount('#app')

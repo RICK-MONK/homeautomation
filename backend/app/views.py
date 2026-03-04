@@ -69,23 +69,44 @@ def check_combination():
 def update():
     try:
         payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raw_body = request.get_data(as_text=True).strip()
+            if raw_body:
+                try:
+                    payload = loads(raw_body)
+                except Exception:
+                    print(f"/api/update invalid JSON body: {raw_body}")
+            else:
+                print("/api/update empty body")
+
         required = {"id", "type", "radar", "waterheight", "reserve", "percentage"}
-        if not isinstance(payload, dict) or not required.issubset(set(payload.keys())):
-            return jsonify({"status":"failed","data":"failed"}), 400
+        if not isinstance(payload, dict):
+            return jsonify({"status":"failed","data":"invalid_json"}), 400
+
+        missing = sorted(list(required.difference(set(payload.keys()))))
+        if missing:
+            print(f"/api/update missing keys: {missing}; payload={payload}")
+            return jsonify({"status":"failed","data":"missing_keys","missing":missing}), 400
 
         modified = dict(payload)
         modified["timestamp"] = int(time())
         payload_json = dumps(modified)
 
-        # Arduino note: hardware_wamos.ino HOST_IP must be the backend machine LAN IP, not localhost.
-        topic = "elet2415/radar"
-        print(f"/api/update MQTT publish -> topic: {topic}, payload_size: {len(payload_json)} bytes")
-        published = Mqtt.publish(topic, payload_json)
         inserted = mongo.insert_radar(modified)
+        print(f"RADAR INSERT: {inserted}")
+        if not inserted:
+            return jsonify({"status":"failed","data":"failed"}), 500
 
-        if published and inserted:
-            return jsonify({"status":"complete","data":"complete"})
-        return jsonify({"status":"failed","data":"failed"}), 500
+        # MQTT is best-effort; API succeeds when DB insert succeeds.
+        topic = "elet2415/radar"
+        try:
+            print(f"/api/update MQTT publish -> topic: {topic}, payload_size: {len(payload_json)} bytes")
+            published = Mqtt.publish(topic, payload_json)
+            print(f"/api/update MQTT publish result: {published}")
+        except Exception as e:
+            print(f"MQTT publish failed (ignored): {e}")
+
+        return jsonify({"status":"complete","data":"complete"})
     except Exception as e:
         print(f"/api/update error: {str(e)}")
         return jsonify({"status":"failed","data":"failed"}), 500
@@ -94,26 +115,29 @@ def update():
 @app.route('/api/reserve/<start>/<end>', methods=['GET'])
 def reserve(start, end):
     try:
-        start_ts = int(start)
-        end_ts = int(end)
-        data = mongo.get_radar_range(start_ts, end_ts)
-        if len(data) > 0:
-            return jsonify({"status":"found","data": data})
-        return jsonify({"status":"failed","data": 0})
-    except Exception:
+        # URL params arrive as strings; normalize to integer epoch seconds.
+        start_ts = int(float(start))
+        end_ts = int(float(end))
+        docs = mongo.get_radar_range(start_ts, end_ts)
+        return jsonify({"status":"found","data": docs}), 200
+    except Exception as e:
+        print(f"/api/reserve error: {e}")
         return jsonify({"status":"failed","data": 0}), 500
 
 
 @app.route('/api/avg/<start>/<end>', methods=['GET'])
 def average(start, end):
     try:
-        start_ts = int(start)
-        end_ts = int(end)
-        data = mongo.avg_reserve(start_ts, end_ts)
-        if len(data) > 0 and "average" in data[0] and data[0]["average"] is not None:
-            return jsonify({"status":"found","data": data[0]["average"]})
-        return jsonify({"status":"failed","data": 0})
-    except Exception:
+        # URL params arrive as strings; normalize to integer epoch seconds.
+        start_ts = int(float(start))
+        end_ts = int(float(end))
+        avg_list = mongo.avg_reserve(start_ts, end_ts)
+        avg = 0
+        if isinstance(avg_list, list) and len(avg_list) > 0:
+            avg = avg_list[0].get("average", 0) or 0
+        return jsonify({"status":"found","data": float(avg)}), 200
+    except Exception as e:
+        print(f"/api/avg error: {e}")
         return jsonify({"status":"failed","data": 0}), 500
 
 

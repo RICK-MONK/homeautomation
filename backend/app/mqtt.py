@@ -12,11 +12,14 @@ from time import sleep
 
 class MQTT:
 
-    # ID = f"IOT_B_1000"
-    ID = f"IOT_B_{randint(1,1000000)}"
+    STUDENT_ID = "620169874"
+    ID = f"IOT_B_{STUDENT_ID}"
 
     #  DEFINE ALL TOPICS TO SUBSCRIBE TO
-    sub_topics = [("620012345_pub", 0), ("620012345", 0), ("620012345_sub", 0)] #  A list of tuples of (topic, qos). Both topic and qos must be present in the tuple.
+    sub_topics = [(f"{STUDENT_ID}_pub", 0), (STUDENT_ID, 0), (f"{STUDENT_ID}_sub", 0)] #  A list of tuples of (topic, qos). Both topic and qos must be present in the tuple.
+    host = "www.yanacreations.com"
+    port = 1883
+    keepalive = 60
 
 
     def __init__(self,mongo):
@@ -34,11 +37,14 @@ class MQTT:
 
 
         # REGISTER CALLBACK FUNCTION FOR EACH TOPIC
-        self.client.message_callback_add("620012345", self.update)
-        self.client.message_callback_add("620012345_pub", self.toggle)
+        self.client.message_callback_add(self.STUDENT_ID, self.update)
+        self.client.message_callback_add(f"{self.STUDENT_ID}_pub", self.toggle)
 
         # ADD MQTT SERVER AND PORT INFORMATION BELOW
-        self.client.connect_async("www.yanacreations.com", 1883, 60)
+        try:
+            self.client.connect(self.host, self.port, self.keepalive)
+        except Exception as e:
+            print(f"MQTT: Initial connect failed: {str(e)}")
        
 
 
@@ -59,13 +65,29 @@ class MQTT:
         print("MQTT: Subscribed to", [topic[0] for topic in self.sub_topics])
 
     def publish(self,topic,payload):
-        try :
+        try:
+            if not self.client.is_connected():
+                try:
+                    self.client.reconnect()
+                    self.sleep(0.2)
+                except Exception as reconnect_error:
+                    print(f"MQTT: Reconnect before publish failed: {str(reconnect_error)}")
+                    try:
+                        self.client.connect(self.host, self.port, self.keepalive)
+                        self.sleep(0.2)
+                    except Exception as connect_error:
+                        print(f"MQTT: Connect before publish failed: {str(connect_error)}")
+                        return False
             info = self.client.publish(topic, payload)
-            info.wait_for_publish()
-            return info.is_published()
+            if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                print(f"MQTT: Publish rc error {info.rc}")
+                return False
+            info.wait_for_publish(timeout=2.0)
+            return True
         
         except Exception as e:
             print(f"MQTT: Publish failed {str(e)}")
+            return False
 
 
     def on_message(self,client, userdata, msg):

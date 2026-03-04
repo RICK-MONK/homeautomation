@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@mdi/font": "7.0.96",
+    "axios": "^1.8.4",
     "chart.js": "^4.4.1",
     "core-js": "^3.29.0",
-    "highcharts": "^11.3.0",
+    "highcharts": "^11.4.8",
+    "highcharts-vue": "^2.0.1",
     "pinia": "^2.0.0",
     "pinia-plugin-persistedstate": "^3.2.0",
     "roboto-fontface": "*",
